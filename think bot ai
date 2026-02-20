@@ -1,0 +1,125 @@
+import streamlit as st
+import ollama
+import time
+
+# -----------------------------
+# Page Config
+# -----------------------------
+st.set_page_config(
+    page_title="Think Bot AI",
+    layout="centered"
+)
+
+st.title("🤖 Think Bot AI")
+
+# -----------------------------
+# Sidebar (Controls)
+# -----------------------------
+with st.sidebar:
+    st.header("⚙️ Settings")
+
+    model = st.selectbox(
+        "Choose model",
+        ["gemma3:1b"]
+    )
+
+    temperature = st.slider(
+        "Temperature",
+        min_value=0.0,
+        max_value=1.5,
+        value=0.6,
+        step=0.1
+    )
+
+    if st.button("🧹 Clear chat"):
+        st.session_state.messages = []
+        st.rerun()
+
+# -----------------------------
+# Session Memory
+# -----------------------------
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# -----------------------------
+# Render Chat History
+# -----------------------------
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
+
+# -----------------------------
+# Chat Input
+# -----------------------------
+user_input = st.chat_input("Type your message")
+
+if user_input:
+    # Store user message
+    st.session_state.messages.append(
+        {"role": "user", "content": user_input}
+    )
+
+    with st.chat_message("user"):
+        st.write(user_input)
+
+    # -----------------------------
+    # Thinking Simulation
+    # -----------------------------
+    with st.chat_message("assistant"):
+        thinking_box = st.empty()
+        thinking_box.write("🤔 **Thinking...**")
+        time.sleep(0.6)
+        thinking_box.write("🧠 **Understanding the question...**")
+        time.sleep(0.6)
+        thinking_box.write("⚙️ **Condensing correct response...**")
+        time.sleep(0.6)
+
+        # -----------------------------
+        # FIXED SYSTEM PROMPT
+        # -----------------------------
+        system_prompt = {
+            "role": "system",
+            "content": """
+You are Think Bot AI.
+
+TASK:
+1. First, internally determine the CORRECT answer to the user's question.
+2. Then compress that correct answer into EXACTLY FOUR WORDS.
+3. Use technical / AI / professional jargon where possible.
+4. Do NOT reveal reasoning.
+5. No punctuation, emojis, or extra text.
+
+Output ONLY the final four words.
+"""
+        }
+
+        # -----------------------------
+        # Model Call
+        # -----------------------------
+        response = ollama.chat(
+            model=model,
+            messages=[system_prompt] + st.session_state.messages,
+            options={"temperature": temperature}
+        )
+
+        reply = response["message"]["content"].strip()
+
+        # -----------------------------
+        # Guardrail: Force EXACTLY 4 words
+        # -----------------------------
+        words = reply.split()
+        if len(words) > 4:
+            reply = " ".join(words[:4])
+        elif len(words) < 4:
+            reply = reply + " optimization"
+
+        # Clear thinking text
+        thinking_box.empty()
+
+        # Show final reply
+        st.write(reply)
+
+    # Store assistant reply
+    st.session_state.messages.append(
+        {"role": "assistant", "content": reply}
+    )
